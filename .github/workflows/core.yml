@@ -1,0 +1,100 @@
+name: Apsilume tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Core tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Configure headless build
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DORBITSIMLITE_BUILD_GUI=OFF
+          -DORBITSIMLITE_BUILD_TESTS=ON
+          -DORBITSIMLITE_BUILD_DEMO=ON
+          -DORBITSIMLITE_BUILD_BENCHMARKS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Run existing CTest suites
+        run: |
+          cmake -E make_directory test-results
+          ctest --test-dir build --build-config Release --output-on-failure --no-tests=error --output-junit "$PWD/test-results/ctest.xml"
+
+      - name: Set up Python for export checks
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Verify headless launch and JSON/CSV exports
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          import math
+          from pathlib import Path
+          import subprocess
+
+          root = Path.cwd()
+          candidates = [
+              root / "build/Release/orbit_simulator.exe",
+              root / "build/orbit_simulator.exe",
+              root / "build/orbit_simulator",
+          ]
+          executable = next((path for path in candidates if path.is_file()), None)
+          if executable is None:
+              raise SystemExit("Built headless executable was not found")
+          output = root / "test-results/smoke"
+          subprocess.run([
+              str(executable), "--headless", "--scene", "2", "--steps", "100",
+              "--json", "--csv", "--data-dir", str(output),
+          ], check=True, timeout=60)
+          json_files = list((output / "exports").glob("*.json"))
+          csv_files = list((output / "exports").glob("*.csv"))
+          assert len(json_files) == len(csv_files) == 1, "Expected JSON and CSV snapshots"
+          snapshot = json.loads(json_files[0].read_text(encoding="utf-8"))
+          assert snapshot["body_count"] == 3, "Figure Eight should contain three bodies"
+          assert math.isclose(snapshot["time_seconds"], 0.1, abs_tol=1e-12), "Incorrect simulated time"
+          with csv_files[0].open(encoding="utf-8", newline="") as stream:
+              rows = list(csv.DictReader(stream))
+          assert len(rows) == 3, "CSV should contain all three bodies"
+          assert {"pos_z", "vel_z", "acc_z"} <= rows[0].keys(), "CSV is missing XYZ components"
+          print("Headless simulation and XYZ exports passed")
+          PY
+
+      - name: Save test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.os }}
+          path: |
+            test-results/
+            build/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+          retention-days: 7
