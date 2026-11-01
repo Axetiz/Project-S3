@@ -22,11 +22,11 @@ using namespace orbitsimlite;
 namespace {
 
 constexpr double kPi = 3.14159265358979323846; // C++17 does not provide a standard pi constant.
-constexpr double kTolAccel = 1e-10;   // relative tolerance for acceleration
-constexpr double kTolRadius = 1e-2;   // 1% relative radius tolerance
-constexpr double kTolEnergy = 5e-3;   // 0.5% relative energy tolerance
-constexpr double kTolPos = 1e-3;      // 0.1% relative position tolerance
-constexpr double kTolMomentum = 1e-12; // drift relative to the initial individual momentum scale
+constexpr double kTolAccel = 1e-10;            // relative tolerance for acceleration
+constexpr double kTolRadius = 1e-2;            // 1% relative radius tolerance
+constexpr double kTolEnergy = 5e-3;            // 0.5% relative energy tolerance
+constexpr double kTolPos = 1e-3;               // 0.1% relative position tolerance
+constexpr double kTolMomentum = 1e-12;         // drift relative to the initial individual momentum scale
 constexpr double kTolCenterOfMass = 1e-6;
 
 // Helper to compute relative error with basic protection against division by 0.
