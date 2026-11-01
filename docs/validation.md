@@ -33,3 +33,9 @@ Start the code review with [the developer guide and file map](architecture.md).
 ## Pre-push review — 2026-10-30
 
 The project owner confirmed the manual application check passed. Both local builds again passed all four CTest suites. Upload contents and the Project-S3 remote were reviewed; local builds and backups remain ignored. Shell quoting in the GitHub workflow was corrected before upload. Remote CI results are pending.
+
+## Cross-platform physics tests — 2026-11-01
+
+The initial GitHub Actions run passed Ubuntu but found two test portability defects: MSVC did not define the nonstandard `M_PI` macro, and macOS failed a momentum comparison normalized by a cancelling initial total. The tests now use an explicit C++17 pi constant and compare vector momentum drift against the sum of initial individual momentum magnitudes, with a relative tolerance of `1e-12`. Simulation code and workflow coverage are unchanged.
+
+The original momentum failure was reproduced locally in a Release build with `-march=native -ffp-contract=fast` (12 of 13 physics cases passed before the fix). After the correction, all four CTest suites passed in both that build and the standard headless Release build. The GitHub Actions run attached to the fix supplies the native Windows and macOS checks.

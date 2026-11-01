@@ -2,13 +2,13 @@
 // Suite ownership and feature-change checks: docs/architecture.md.
 // OrbitSimLite - simple numerical accuracy checks for the physics core
 //
-// These tests are intentionally lightweight and header-only; they are not a
+// These tests are intentionally lightweight and self-contained; they are not a
 // full unit test framework, but they provide a quick way to sanity‑check the
 // integrators and gravitational model before publishing the project.
 //
 // Usage (from the CMake build directory):
-//   cmake --build . --target orbitsimlite_tests
-//   ./orbitsimlite_tests
+//   cmake --build . --target orbitsimlite_physics_tests
+//   ctest -R '^physics$' --output-on-failure
 
 #include <algorithm>
 #include <cmath>
@@ -21,11 +21,12 @@ using namespace orbitsimlite;
 
 namespace {
 
+constexpr double kPi = 3.14159265358979323846; // C++17 does not provide a standard pi constant.
 constexpr double kTolAccel = 1e-10;   // relative tolerance for acceleration
 constexpr double kTolRadius = 1e-2;   // 1% relative radius tolerance
 constexpr double kTolEnergy = 5e-3;   // 0.5% relative energy tolerance
 constexpr double kTolPos = 1e-3;      // 0.1% relative position tolerance
-constexpr double kTolMomentum = 5e-3; // 0.5% relative momentum tolerance
+constexpr double kTolMomentum = 1e-12; // drift relative to the initial individual momentum scale
 constexpr double kTolCenterOfMass = 1e-6;
 
 // Helper to compute relative error with basic protection against division by 0.
@@ -104,7 +105,7 @@ bool test_circular_orbit_rk4() {
     const double v0 = std::sqrt(Physics::DefaultG * M / r0);
     planet.vel = Vec3{0.0, v0};
 
-    const double orbital_period = 2.0 * M_PI * r0 / v0;
+    const double orbital_period = 2.0 * kPi * r0 / v0;
 
     std::vector<Body> others{sun};
 
@@ -152,7 +153,7 @@ bool test_rk4_vs_euler_error() {
     const double r0 = 1.496e11;
 
     const double v0 = std::sqrt(Physics::DefaultG * M / r0);
-    const double T = 2.0 * M_PI * r0 / v0;
+    const double T = 2.0 * kPi * r0 / v0;
     const double dt = T / 2000.0;
     const int steps = static_cast<int>(std::round(T / dt));
 
@@ -197,26 +198,28 @@ bool test_momentum_conservation_two_body() {
     auto total_momentum = [](const std::vector<Body> &bs) {
         Vec3 p{0.0, 0.0};
         for (const auto &b : bs) {
-            p.x += b.mass * b.vel.x;
-            p.y += b.mass * b.vel.y;
+            p += b.vel * b.mass;
         }
         return p;
     };
 
     const auto &initial_bodies = sim.get_bodies();
-    Vec3 p0 = total_momentum(initial_bodies);
+    const Vec3 p0 = total_momentum(initial_bodies);
+    // Opposite momenta cancel to zero, so a relative error against their sum is undefined.
+    // Scale the vector drift by the initial individual momenta instead; this also tolerates
+    // roundoff from fused multiply-add without hiding a physical loss of conservation.
+    double momentum_scale = 0.0;
+    for (const auto &body : initial_bodies)
+        momentum_scale += body.mass * body.vel.length();
 
     for (int i = 0; i < steps; ++i) {
         sim.step();
     }
 
     const auto &final_bodies = sim.get_bodies();
-    Vec3 p1 = total_momentum(final_bodies);
-
-    double p0_mag = std::sqrt(p0.x * p0.x + p0.y * p0.y);
-    double p1_mag = std::sqrt(p1.x * p1.x + p1.y * p1.y);
-
-    double err = rel_error(p1_mag, p0_mag);
+    const Vec3 p1 = total_momentum(final_bodies);
+    const double err = (p1 - p0).length() / momentum_scale;
+    std::cout << "[Two-body momentum] scaled vector drift=" << err << "\n";
     return err < kTolMomentum;
 }
 
