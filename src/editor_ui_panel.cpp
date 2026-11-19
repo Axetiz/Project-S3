@@ -19,16 +19,20 @@ void EditorUI::panel(sf::RenderWindow &window, const UiModel &model) {
     box(window, rectangle(left, 0, width, float(model.world.height)), sf::Color(17, 25, 39));
     label(window, "Apsilume 3D", rectangle(left + 14, 10, width - 28, 25), 21, sf::Color(235, 242, 252));
     label(window, model.document.name + (model.document.dirty ? " *" : ""),
-          rectangle(left + 14, 39, width - 28, 18), 13, sf::Color(137, 194, 242));
-    label(window,
-          std::string(model.playback.paused ? "PAUSED" : "PLAYING") + "  |  t " +
-              number(model.document.simulation.get_time()) + " " +
-              (model.document.units == "SI" ? "s" : "time units"),
-          rectangle(left + 14, 61, width - 28, 17), 12, sf::Color(194, 211, 230));
-    label(window,
-          "Speed x" + number(model.playback.speed) + "  |  " +
-              number(model.playback.base_rate * model.playback.speed) + " sim / real s",
-          rectangle(left + 14, 83, width - 28, 16), 11, sf::Color(144, 164, 188));
+          rectangle(left + 14, 39, width - 28, 20), 14, sf::Color(137, 194, 242), false);
+    // Keep changing values on separate, left-aligned rows. A combined status line
+    // shrinks or truncates as time grows; these rows retain readable 13 px text.
+    const auto status_row = [&](const std::string &text, float top, sf::Color color) {
+        label(window, text, rectangle(left + 14, top, width - 28, 20), 13, color, false, 13);
+    };
+    status_row(model.playback.paused ? "PAUSED" : "PLAYING", 64, sf::Color(194, 211, 230));
+    status_row("Time: " + number(model.document.simulation.get_time()) +
+                   (model.document.units == "SI" ? " s" : " time units"),
+               87, sf::Color(194, 211, 230));
+    status_row("Speed: " + number(model.playback.speed) + "x", 110, sf::Color(167, 189, 217));
+    status_row("Rate: " + number(model.playback.base_rate * model.playback.speed) +
+                   (model.document.units == "SI" ? " sim s / real s" : " units / real s"),
+               133, sf::Color(167, 189, 217));
     float y = panel_top - scroll_;
     const float x = left + 13, w = width - 26;
     const float bottom = float(model.world.height) - footer_height;

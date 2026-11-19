@@ -59,7 +59,7 @@ inline std::string encoded(const sf::String &value) {
 }
 
 // These screen-space boundaries must agree in drawing, clipping and hit testing.
-inline constexpr float panel_top = 112;
+inline constexpr float panel_top = 166;
 inline constexpr float footer_height = 28;
 
 // Action::None reserves these arguments for navigation consumed by EditorUI itself.
